@@ -1,4 +1,4 @@
-2020/03/30: Forked storcli-check from mtik00 to add additional changes:  BBU support, VMware support, etc.  I am only using the Python3 version of the script, and it is the only script I will be updating.
+2020/03/30: Forked mtik00/storcli-check to add additional changes:  BBU support, VMware ESXi support, --keepfiles and several usability tweaks.  I am only using the Python3 version of the script, and it is the only script I will be updating.
 
 # storcli-check.py3
 `storcli_check.py3` is a Python 3-compatible script that will check your
@@ -134,3 +134,4 @@ It doesn't show up since that event is not *warning* or above.
 
 It's not a perfect system, but it serves its purpose.  You'll need to clear the
 event log of the offending controller to get the report to stop spamming your email.
+An example command you could use:  storcli /cX delete events
