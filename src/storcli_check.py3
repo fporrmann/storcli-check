@@ -422,6 +422,7 @@ class Controller(object):
         # NOTE: We still want to *see* HBAs.  Otherwise the controller indicies
         # might get mangled.
         if not self._driver_data.get("name", '') in SUPPORTED_DRIVERS:
+            self._logger.debug("Driver [%s] not supported.  Info not actually checked!", self._driver_data.get("name", '') )
             self.result, self.errors = True, []
             return
 
@@ -471,6 +472,8 @@ class Controller(object):
                 result = False
 
         if self._event_info:
+            self._logger.debug("Event found in controller log.  Clear event log to clear 'failure'.")
+            self._logger.debug("  (Example command line: storcli /cX delete events)")
             result = False
             errors += ["%s: %s" % (x["time"], x["description"]) for x in self._event_info]
 
