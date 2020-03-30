@@ -27,14 +27,20 @@ __creationDate__ = "06/02/2015"
 __license__ = "MIT"
 __version__ = "1.4.0"
 
-(IS_WIN, IS_LIN) = ("win" in sys.platform, "lin" in sys.platform)
+# Python on VMware ESXi (20200330, ESXi 6.7) identifies itself as "linux", but
+#  uses very few of the standard LSB paths.  Check for ESXI by file paths.
+IS_WIN = "win" in sys.platform
+IS_LIN = "lin" in sys.platform
+if os.path.exists("/vmfs/volumes") and os.path.exists("/etc/vmware"):
+    IS_LIN = False
+    IS_ESXI = True
 # Configuration ################################################################
 CONTROLLER_OK_STATUSES = ["optimal"]
 CV_OK_STATES = ["optimal"]
 VD_OK_STATES = ["optl"]
 PD_OK_STATES = ["onln", "ugood", "dhs", "ghs"]
 BBU_OK_STATES = ["optimal"]
-SUPPORTED_DRIVERS = ["megaraid_sas", "megasas35.sys"]
+SUPPORTED_DRIVERS = ["megaraid_sas", "megasas35.sys", "lsi-mr3"] # lsi-mr3: VMware driver
 DEFAULT_FROM = "%s@%s" % (getuser(), socket.gethostname())
 LOGFILE = os.path.join(os.sep, "var", "log", "storcli_check.log") if IS_LIN else "storcli_check.log"
 ################################################################################
@@ -116,9 +122,14 @@ def find_storcli(logger, names=["storcli", "storcli64"]):
     for path in os.environ['PATH'].split(os.pathsep):
         default_paths += [os.path.join(path, x) for x in names]
 
-    # Add the default location of the RPM
+    # Add the default location of the RPM on Linux
     default_paths += [
         os.path.join(os.sep, "opt", "MegaRAID", "storcli", x)
+        for x in names]
+
+    # Add the default location of the VIB on ESXi (1.23.02)
+    default_paths += [
+        os.path.join(os.sep, "opt", "lsi", "storcli", x)
         for x in names]
 
     # I like to put stuff in /usr/local/bin, which may not be in $PATH depending
@@ -270,7 +281,7 @@ def sendmail(subject, to, sender, body, mailserver, body_type="html", attachment
     for attachment in attachments:
         part = MIMEBase('application', "octet-stream")
         part.set_payload(open(attachment, "rb").read())
-        Encoders.encode_base64(part)
+        encoders.encode_base64(part)
 
         part.add_header('Content-Disposition', 'attachment', filename=os.path.basename(attachment))
 
@@ -777,7 +788,7 @@ if __name__ == '__main__':
             zipdir = tempfile.mkdtemp()
             zipped_log_path = os.path.abspath(os.path.join(zipdir, "logs.zip"))
             flush_logfile(logger)
-            list(zip([working_directory, LOGFILE], zipped_log_path))
+            zip([working_directory, LOGFILE], zipped_log_path)
 
         subject, body = s.report_as_html()
 
