@@ -696,13 +696,13 @@ class StorCLI(object):
     def report_as_html(self):
         """Generates an HTML report of the state of the topology."""
         body = ""
-        subject = "%s MR Check Result: PASS" % socket.gethostname()
+        subject = "PASS: %s MR Check Result: PASS" % socket.gethostname()
 
         for controller in self._controllers:
             result, errors = controller.ok()
 
             if not result:
-                subject = "%s MR Check Result: FAIL" % socket.gethostname()
+                subject = "FAIL: %s MR Check Result: FAIL" % socket.gethostname()
 
             body += controller.report_as_html()
 
