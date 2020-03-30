@@ -678,6 +678,9 @@ def parse_arguments(parser, logger, args=None):
 def init_parser():
     parser = OptionParser(version=__version__)
     parser.add_option(
+        "--keepfiles", dest="keepfiles", action="store_true",
+        help="Keep all temporary files generated during run.", default=False)
+    parser.add_option(
         "--mailto", dest="mailto",
         help="REQUIRED: comma-separated list of email addresses to send the report to")
     parser.add_option(
@@ -758,8 +761,11 @@ if __name__ == '__main__':
                 attachments=[zipped_log_path] if zipped_log_path else None,
                 cc=options.mailcc.split(","))
 
-        remove_directory(zipdir)
+        if not options.keepfiles: remove_directory(zipdir)
 
-    remove_directory(working_directory)
+    if not options.keepfiles:
+        remove_directory(working_directory)
+        if os.path.exists(LOGFILE): os.remove(LOGFILE)
+        if os.path.exists("output.html"): os.remove("output.html")
 
     sys.exit(0)
