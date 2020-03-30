@@ -1,12 +1,10 @@
-*NOTE: As of 13-JUL-2018, I no longer have access to MR controllers;  This repo should be considered deprecated*
- 
- **Please  consider one of the forks of this project.**
+2020/03/30: Forked storcli-check from mtik00 to add additional changes:  BBU support, VMware support, etc.  I am only using the Python3 version of the script, and it is the only script I will be updating.
 
 # storcli-check
-`storcli_check.py` is a Python 2.4-compatible script that will check your
+`storcli_check.py3` is a Python 3-compatible script that will check your
 MegaRAID adapter for issues and send a report by email.  It's designed to be
 self contained and easily added to a cron job.  The only file you need from this
-repo is `src/storcli_check.py`.
+repo is `src/storcli_check.py3`.
 
 ## Usage
 The following command-line parameters are optional:
@@ -42,18 +40,18 @@ and also the `MegaSAS.log` file that `storcli` generates (one info and event fil
 for each controller).
 
 ## Real World
-I'm using this script to check the state of my LSI controller on a XenServer
+I'm using this script to check the state of my LSI controller on a VMware ESXi 6.7
 hypervisor.  It was a lot easier than trying to figure out how to pass the
 controller to a guest VM and using MegaRAID Storage Manager, get MSM snmp installed
 and running on the hypervisor, etc.  The requirements for this script are pretty
 minimal (in my opinion), and it is working in my lab.
 
 I have it periodically running via `cron`.  It's working so far!  I run the defaults
-every 10 minutes (doesn't send logs if everything's ok), and `--force` the report
-once per week:
+every hour (doesn't send logs if everything's ok), and `--force` the report
+once per day:
 
-    */10 * * *  *   root /usr/local/bin/storcli-check --to=me@example.com --mailserver=mailhost.example.com 2>/dev/null
-    0  8  *  *  mon root /usr/local/bin/storcli-check --to=me@example.com --mailserver=mailhost.example.com --force 2>/dev/null
+    15   *    *   *   *  /vmfs/volumes/<Datastore>/util/LSI/storcli-check --mailto=me@example.com --mailserver=mailhost.example.com 2>/dev/null
+    10   6    *   *   *  /vmfs/volumes//<Datastore>util/LSI/storcli-check --mailto=me@example.com --mailserver=mailhost.example.com --force 2>/dev/null
 
 ## Caveats
 
@@ -64,7 +62,7 @@ authentication to `sendmail()`.
    are part of a volume.  If that's not the case in your configuration, you may
    want to modify which PD states are *OK* in your configuration.
  - The script was tested with
-   [storcli64 version 1.15.05](https://docs.broadcom.com/docs/12354804).  Other
+   [storcli64 version 1.15.05](https://docs.broadcom.com/docs/12354804) as well as 1.23.02 for BBU support.  Other
    versions will most likely work, but may cause issues with the regular expressions.
 
 ## Configuration
