@@ -22,10 +22,10 @@ from email import encoders
 
 
 # Metadata #####################################################################
-__author__ = "Timothy McFadden"
+__author__ = "Timothy McFadden and Timothy J. Massey"
 __creationDate__ = "06/02/2015"
 __license__ = "MIT"
-__version__ = "1.3.0"
+__version__ = "1.4.0"
 
 (IS_WIN, IS_LIN) = ("win" in sys.platform, "lin" in sys.platform)
 # Configuration ################################################################
@@ -33,6 +33,7 @@ CONTROLLER_OK_STATUSES = ["optimal"]
 CV_OK_STATES = ["optimal"]
 VD_OK_STATES = ["optl"]
 PD_OK_STATES = ["onln", "ugood", "dhs", "ghs"]
+BBU_OK_STATES = ["optimal"]
 SUPPORTED_DRIVERS = ["megaraid_sas", "megasas35.sys"]
 DEFAULT_FROM = "%s@%s" % (getuser(), socket.gethostname())
 LOGFILE = os.path.join(os.sep, "var", "log", "storcli_check.log") if IS_LIN else "storcli_check.log"
@@ -67,6 +68,16 @@ PD_INFO_LINE_RE = re.compile("""
     (?P<sector_size>.+?)                \s+
     (?P<model>.+?)                      \s+
     (?P<spun>.+?)                       \s*
+""", re.VERBOSE | re.IGNORECASE)
+BBU_LINE_RE = re.compile("""
+   ^(?P<model>.+?)\s+
+    (?P<state>.+?)\s+
+    (?P<retention_time>.+?)\s+
+    (?P<temp>\d+C)\s+
+    (?P<mode>.+?)\s+
+    (?P<mfg_date>.+?)\s+
+    (?P<next_learn_date>.+?)\s+
+    (?P<next_learn_time>.+?)\s*
 """, re.VERBOSE | re.IGNORECASE)
 CACHEVAULT_LINE_RE = re.compile("""
    ^(?P<model>.+?)\s+
@@ -279,12 +290,14 @@ class Controller(object):
         self._driver_data = {}
         self._vd_info = []
         self._pd_info = []
+        self._bbu_info = {}
         self._cv_info = {}
         self._event_info = []
 
         self.vd_list = "--- no virtual drives found ---"
         self.pd_list = "--- no physical drives found ---"
         self.cv_list = "--- no Cachevault found ---"
+        self.bbu_list = "--- no BBU found ---"
         self._parse_info()
         self._parse_events()
         self._check()
@@ -362,6 +375,15 @@ class Controller(object):
                 self._logger.error("Unparsed PDs on: %s", self)
                 raise Exception("Unparsed PDs on: %s" % self)
 
+            match = re.search("^BBU.Info.*?(---.*---$)", self._cached_info.decode('ascii'), re.MULTILINE | re.DOTALL)
+            if match:
+                self.bbu_list = match.group(1)
+                for line in self.bbu_list.split("\n"):
+                    match = BBU_LINE_RE.search(line)
+                    if match:
+                        self._bbu_info = match.groupdict()
+                        break
+
             match = re.search("^Cachevault.Info.*?(---.*---$)", self._cached_info.decode('ascii'), re.MULTILINE | re.DOTALL)
             if match:
                 self.cv_list = match.group(1)
@@ -428,6 +450,15 @@ class Controller(object):
                         PD_OK_STATES))
                     result = False
 
+        if not self._bbu_info:
+            errors.append("ERROR:  No BBU info!")
+        else:
+            if str(self._bbu_info["state"]).lower() not in BBU_OK_STATES:
+                errors.append("BBU state: '%s' not in %s" % (
+                    str(self._bbu_info["state"]).lower(),
+                    BBU_OK_STATES))
+                result = False
+
         if self._event_info:
             result = False
             errors += ["%s: %s" % (x["time"], x["description"]) for x in self._event_info]
@@ -448,8 +479,11 @@ class Controller(object):
     def _pd_list_as_html(self):
         return self._format_table_html(self.pd_list, PD_INFO_LINE_RE, PD_OK_STATES)
 
+    def _bbu_list_as_html(self):
+        return "<br><br>" + self._format_table_html(self.bbu_list, BBU_LINE_RE, BBU_OK_STATES)
+
     def _cv_list_as_html(self):
-        return "<br>" + self._format_table_html(self.cv_list, CACHEVAULT_LINE_RE, CV_OK_STATES)
+        return "<br><br>" + self._format_table_html(self.cv_list, CACHEVAULT_LINE_RE, CV_OK_STATES)
 
     def _format_table_html(self, text, info_regex, states):
         """Reformat the data table based on the info_regex["state"] match.
@@ -498,6 +532,7 @@ class Controller(object):
         <p><code>Status: %s<br>Model: %s<br>SAS Address: %s<br>Firmware Package: %s<br></code></p>
         <p><b>VD Status</b><code>%s</code></p>
         <p><b>PD Status</b><code>%s</code></p>
+        <p><b>BBU Status</b><code>%s</code></p>
         <p><b>CV Info</b><code>%s</code></p>
         """ % (
             status,
@@ -505,6 +540,7 @@ class Controller(object):
             self._basic_data["sasaddress"], self._basic_data["fw_package"],
             self._vd_list_as_html(),
             self._pd_list_as_html(),
+            self._bbu_list_as_html(),
             self._cv_list_as_html()
         )
 
