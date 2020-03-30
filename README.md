@@ -1,6 +1,6 @@
 2020/03/30: Forked storcli-check from mtik00 to add additional changes:  BBU support, VMware support, etc.  I am only using the Python3 version of the script, and it is the only script I will be updating.
 
-# storcli-check
+# storcli-check.py3
 `storcli_check.py3` is a Python 3-compatible script that will check your
 MegaRAID adapter for issues and send a report by email.  It's designed to be
 self contained and easily added to a cron job.  The only file you need from this
@@ -8,6 +8,7 @@ repo is `src/storcli_check.py3`.
 
 ## Usage
 The following command-line parameters are optional:
+ - `--keepfiles`: Tell the script to not delete its temporary/log files.
  - `--mailto`: Comma-separated list of emails to send the report to (e.g. `"first1.last1@example.com,first2.other2@example.com"`)
  - `--mailserver`:  The hostname of the SMTP server to use (e.g. "mailhost.example.com")
  - `--force`: Force the script to send the report even if everything's fine (useful for *weekly status*)
