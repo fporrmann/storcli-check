@@ -20,6 +20,9 @@ from email.mime.base import MIMEBase
 from email.mime.text import MIMEText
 from email import encoders
 
+from dateutil import parser as duParser
+from datetime import datetime
+from os.path import exists
 
 # Metadata #####################################################################
 __author__ = "Timothy McFadden and Timothy J. Massey"
@@ -43,6 +46,8 @@ BBU_OK_STATES = ["optimal"]
 SUPPORTED_DRIVERS = ["megaraid_sas", "megasas35.sys", "lsi-mr3"] # lsi-mr3: VMware driver
 DEFAULT_FROM = "%s@%s" % (getuser(), socket.gethostname())
 LOGFILE = os.path.join(os.sep, "var", "log", "storcli_check.log") if IS_LIN else "storcli_check.log"
+START_DATE_FILE=f"{os.path.dirname(os.path.realpath(__file__))}/date_file"
+CHECK_FOR_BBU=False
 ################################################################################
 INFO_RE = re.compile("""
     ^Model\s=\s(?P<model>.*?)$                              .*
@@ -96,6 +101,22 @@ DRIVER_RE = re.compile("""
     ^Driver\sName\s=\s(?P<name>.+?)\s*$        .*
     ^Driver\sVersion\s=\s(?P<version>.+?)\s*$
 """, re.VERBOSE | re.MULTILINE | re.IGNORECASE | re.DOTALL)
+
+##############################################################
+
+
+st = datetime(1970, 1, 1, 0, 0, 0)
+
+if exists(START_DATE_FILE):
+   f = open(START_DATE_FILE, "r")
+   st = duParser.parse(f.read())
+   f.close()
+
+
+##############################################################
+
+
+
 
 def find_storcli(logger, names=["storcli", "storcli64"]):
     """Look for the storcli application.  This is a little tricky because we
@@ -336,7 +357,7 @@ class Controller(object):
         if not self._cached_events:
             return
 
-        parts = re.split("seqNum", self._cached_events.decode('ascii'))
+        parts = re.split("seqNum", self._cached_events)
         for part in parts[1:]:
             self._event_info.append(self._event_data(part))
 
@@ -372,7 +393,7 @@ class Controller(object):
             else:
                 pd_count = None
 
-            match = re.search("^PD\sLIST.*?===$(.*?)EID-", self._cached_info.decode('ascii'), re.MULTILINE | re.DOTALL)
+            match = re.search("^PD\sLIST.*?===$(.*?)EID=", self._cached_info.decode('ascii'), re.MULTILINE | re.DOTALL)
             if match:
                 self.pd_list = match.group(1)
 
@@ -462,14 +483,15 @@ class Controller(object):
                         PD_OK_STATES))
                     result = False
 
-        if not self._bbu_info:
-            errors.append("ERROR:  No BBU info!")
-        else:
-            if str(self._bbu_info["state"]).lower() not in BBU_OK_STATES:
-                errors.append("BBU state: '%s' not in %s" % (
-                    str(self._bbu_info["state"]).lower(),
-                    BBU_OK_STATES))
-                result = False
+        if CHECK_FOR_BBU:
+           if not self._bbu_info:
+               errors.append("ERROR:  No BBU info!")
+           else:
+               if str(self._bbu_info["state"]).lower() not in BBU_OK_STATES:
+                   errors.append("BBU state: '%s' not in %s" % (
+                       str(self._bbu_info["state"]).lower(),
+                       BBU_OK_STATES))
+                   result = False
 
         if self._event_info:
             self._logger.debug("Event found in controller log.  Clear event log to clear 'failure'.")
@@ -483,7 +505,7 @@ class Controller(object):
             for error in errors:
                 self._logger.debug("...%s", error)
 
-            self._logger.warn("%s: !!!FAIL!!!", self)
+            self._logger.warning("%s: !!!FAIL!!!", self)
 
         self.result, self.errors = result, errors
 
@@ -597,7 +619,7 @@ class StorCLI(object):
 
     def _command(self, command):
         """Execute a generic command on the command line and return the result"""
-        command = "%s %s" % (self._path, command)
+        command = "%s %s nolog" % (self._path, command)
         return execute(command, cwd=self._working_directory)
 
     def _load_from_debug_dir(self, path):
@@ -640,9 +662,29 @@ class StorCLI(object):
 
             self._cached_events[controller_id] = self._command("/c%i show events filter=warning,critical,fatal" % controller_id)
 
+            ce = self._cached_events[controller_id].decode('ascii')
+            match = re.search("Time: (.*?)$", ce, re.MULTILINE)
+            valid = False
+
+            while match:
+               if match:
+                   t = match.group(1)
+                   if(duParser.parse(t) < st):
+                       ce = ce[match.start() + 1:]
+                   else:
+                       ce = ce[match.start():]
+                       valid = True
+                       break
+               match = re.search("Time: (.*?)$", ce, re.MULTILINE)
+
+            if not valid:
+               ce = ""
+
+            self._cached_events[controller_id] = ce
+
             # Store off the events so they get zipped up for the report
             temp_file = os.path.join(self._working_directory, "%02i-events.txt" % controller_id)
-            fh = open(temp_file, "wb")
+            fh = open(temp_file, "w")
             fh.write(self._cached_events[controller_id])
             fh.close()
             self._logger.debug("wrote [%s]", temp_file)
@@ -817,5 +859,10 @@ if __name__ == '__main__':
         remove_directory(working_directory)
         if os.path.exists(LOGFILE): os.remove(LOGFILE)
         if os.path.exists("output.html"): os.remove("output.html")
+
+    f = open(START_DATE_FILE, "w")
+    dStr = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    f.write(dStr)
+    f.close()
 
     sys.exit(0)
